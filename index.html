@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas of Indian Art — An Interactive Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>
+  :root{
+    --ink:#241f1a;
+    --parchment:#efe6d3;
+    --parchment-dim:#e4d8bf;
+    --panel:#faf5e9;
+    --rule:rgba(36,31,26,0.16);
+    --stone:#6b7a8f;
+    --sandstone:#b98a45;
+    --terracotta:#a4472f;
+    --bronze:#8a5a34;
+    --peacock:#1f6f6b;
+    --maroon:#712a3a;
+    --modern:#2e4374;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--parchment);
+    color:var(--ink);
+    font-family:'Iowan Old Style','Palatino Linotype',Georgia,serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    padding:44px 32px 22px;
+    max-width:1400px;margin:0 auto;
+  }
+  .kicker{
+    display:flex;align-items:baseline;gap:14px;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    color:var(--stone); font-size:13px; margin-bottom:16px;
+  }
+  .kicker .dot{width:6px;height:6px;border-radius:50%;background:var(--terracotta);}
+  h1{
+    font-size:clamp(30px,4.4vw,50px);
+    line-height:1.05; margin:0 0 14px; font-weight:500; letter-spacing:-0.01em;
+    max-width:16ch;
+  }
+  h1 em{font-style:italic;color:var(--terracotta);}
+  .sub{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:15.5px; line-height:1.6; color:#4a4238; max-width:62ch; margin:0;
+  }
+
+  .legend{
+    display:flex; flex-wrap:wrap; gap:8px;
+    max-width:1400px; margin:22px auto 0; padding:0 32px;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+  }
+  .legend-chip{
+    display:flex; align-items:center; gap:7px;
+    border:1px solid var(--rule); border-radius:20px;
+    padding:6px 13px 6px 9px;
+    font-size:12px; cursor:pointer; background:var(--panel);
+    transition:background .15s ease, opacity .15s ease;
+  }
+  .legend-chip.off{opacity:0.35;}
+  .legend-chip:hover{background:var(--parchment-dim);}
+  .legend-swatch{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+
+  .layout{
+    display:grid;
+    grid-template-columns:380px 1fr;
+    gap:0;
+    max-width:1400px; margin:24px auto 60px; padding:0 32px;
+    align-items:start;
+  }
+  .sidebar{
+    max-height:640px; overflow-y:auto;
+    border-right:1px solid var(--rule);
+    padding-right:18px;
+    scrollbar-width:thin;
+  }
+  .era-group{margin-bottom:22px;}
+  .era-title{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:11.5px; font-weight:700; letter-spacing:.03em;
+    color:var(--era-color); text-transform:uppercase;
+    margin-bottom:10px; display:flex; align-items:center; gap:8px;
+  }
+  .era-title::before{content:'';width:14px;height:2px;background:var(--era-color);}
+
+  .site-card{
+    border:1px solid var(--rule); border-radius:6px;
+    padding:12px 14px; margin-bottom:9px;
+    cursor:pointer; background:var(--panel);
+    transition:box-shadow .15s ease, border-color .15s ease;
+  }
+  .site-card:hover{box-shadow:0 4px 12px rgba(36,31,26,0.1);}
+  .site-card.active{
+    border-color:var(--era-color);
+    box-shadow:0 6px 16px rgba(36,31,26,0.16);
+  }
+  .site-name{font-size:16px; font-weight:600; margin-bottom:2px;}
+  .site-dates{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:11px; color:var(--era-color); font-weight:700; margin-bottom:6px;
+  }
+  .site-desc{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:12.8px; line-height:1.55; color:#4a4238; margin:0 0 8px;
+  }
+  .site-tags{display:flex; flex-wrap:wrap; gap:5px;}
+  .tag{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:10.5px; color:var(--era-color);
+    background:color-mix(in srgb, var(--era-color) 12%, transparent);
+    border-radius:10px; padding:2px 9px;
+  }
+
+  #map{
+    height:640px; border-radius:6px;
+    box-shadow:0 12px 30px rgba(36,31,26,0.18);
+    border:1px solid var(--rule);
+  }
+  .leaflet-popup-content-wrapper{
+    background:var(--panel); border-radius:6px;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+  }
+  .leaflet-popup-content{margin:12px 14px; font-size:12.8px; line-height:1.55;}
+  .popup-title{font-family:Georgia,serif; font-size:16px; font-weight:600; margin:0 0 2px; color:var(--ink);}
+  .popup-dates{font-size:11px; font-weight:700; margin-bottom:6px;}
+  .leaflet-popup-tip{background:var(--panel);}
+
+  footer{
+    max-width:1400px; margin:0 auto; padding:0 32px 50px;
+    font-family:'Helvetica Neue',Arial,sans-serif; font-size:12px; color:var(--stone);
+    border-top:1px solid var(--rule); padding-top:18px;
+  }
+
+  @media (max-width:960px){
+    .layout{grid-template-columns:1fr;}
+    .sidebar{max-height:none; border-right:none; border-bottom:1px solid var(--rule); padding-right:0; padding-bottom:16px; margin-bottom:16px;}
+    #map{height:420px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker"><span class="dot"></span>An interactive map · Indian art history</div>
+  <h1>Atlas of <em>Indian Art</em></h1>
+  <p class="sub">Fifteen places, seven movements, four thousand years — from an Indus Valley port city to a contemporary artists' colony on the Bay of Bengal. Click a site card or a map pin to explore what was made there, and why it mattered.</p>
+</header>
+
+<div class="legend" id="legend"></div>
+
+<div class="layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div id="map"></div>
+</div>
+
+<footer>Created for CO1 — Interactive Art Map. Site locations are approximate city/monument centres; map data © OpenStreetMap contributors.</footer>
+
+<script>
+const ERA_META = {
+  indus:     {label:"Indus Valley Civilisation", color:"#6b7a8f"},
+  classical: {label:"Mauryan & Gupta Classical", color:"#b98a45"},
+  temple:    {label:"Medieval Temple Sculpture", color:"#a4472f"},
+  court:     {label:"Chola & Regional Courts", color:"#8a5a34"},
+  mughal:    {label:"Mughal Empire", color:"#1f6f6b"},
+  bengal:    {label:"Bengal School & Nationalist Art", color:"#712a3a"},
+  modern:    {label:"Modern & Contemporary", color:"#2e4374"}
+};
+
+const SITES = [
+  {id:"dholavira", name:"Dholavira", lat:23.8808877, lng:70.2140444, era:"indus",
+   dates:"c. 2650–1900 BCE",
+   desc:"One of the largest and best-preserved Harappan cities, laid out with precision on a grid of streets, reservoirs, and fortified sectors.",
+   tags:["Urban planning","Stone & shell beadcraft","Inscribed signboard"]},
+
+  {id:"sarnath", name:"Sarnath", lat:25.3715564, lng:83.0252136, era:"classical",
+   dates:"c. 250 BCE – 500 CE",
+   desc:"Site of Ashoka's Lion Capital, marking the start of monumental royal stone sculpture, and later a Gupta-era centre for the serene, meditative Buddha image that became a pan-Asian template.",
+   tags:["Lion Capital","Gupta Buddha type","Mauryan polish"]},
+
+  {id:"ajanta", name:"Ajanta Caves", lat:20.5513286, lng:75.7069356, era:"classical",
+   dates:"c. 460–480 CE",
+   desc:"Rock-cut Buddhist monasteries holding the finest surviving classical Indian murals — Jataka tales painted with fluid line and tonal modelling that gives flat rock real depth.",
+   tags:["Mural painting","Jataka narratives","Mineral pigment"]},
+
+  {id:"ellora", name:"Ellora Caves", lat:20.0267844, lng:75.1770869, era:"temple",
+   dates:"6th–10th century CE",
+   desc:"Thirty-four rock-cut temples where Buddhist, Hindu, and Jain traditions sit side by side, culminating in the Kailasa Temple — an entire structure carved top-down from one basalt outcrop.",
+   tags:["Kailasa Temple","Multi-faith rock-cut art","Monolithic sculpture"]},
+
+  {id:"khajuraho", name:"Khajuraho", lat:24.8318452, lng:79.9198549, era:"temple",
+   dates:"c. 950–1050 CE",
+   desc:"Chandela-dynasty temples covered in dense, exuberant figural sculpture — celestial dancers, deities, and famously intricate friezes — showing the peak of North Indian temple carving.",
+   tags:["Chandela sculpture","Nagara architecture","Figural relief"]},
+
+  {id:"konark", name:"Konark Sun Temple", lat:19.8875953, lng:86.0945364, era:"temple",
+   dates:"13th century CE",
+   desc:"A 13th-century temple built as a colossal stone chariot for the sun god Surya, its twenty-four carved wheels and horses turning architecture itself into narrative sculpture.",
+   tags:["Kalinga architecture","Chariot form","Stone wheel reliefs"]},
+
+  {id:"hampi", name:"Hampi", lat:15.3350132, lng:76.4600240, era:"temple",
+   dates:"14th–16th century CE",
+   desc:"Capital of the Vijayanagara Empire, its temple complexes and royal enclosures blend Dravidian sculptural tradition with courtly secular architecture across a dramatic boulder landscape.",
+   tags:["Vijayanagara style","Stone chariot","Musical pillars"]},
+
+  {id:"thanjavur", name:"Thanjavur", lat:10.787719, lng:79.1384288, era:"court",
+   dates:"c. 850–1250 CE, later 17th–19th c.",
+   desc:"Heartland of Chola bronze-casting — including the Nataraja — and, centuries later, home to the Thanjavur painting style: gesso relief work inlaid with glass and gold foil.",
+   tags:["Chola bronzes","Nataraja","Tanjore painting"]},
+
+  {id:"jaipur", name:"Jaipur", lat:26.9124336, lng:75.7872709, era:"court",
+   dates:"18th century CE onward",
+   desc:"A major centre of Rajput court painting, where Mughal miniature technique fused with local Rajasthani colour and subject matter — courtly life, Ragamala musical sets, and Krishna legends.",
+   tags:["Rajasthani miniature","Ragamala painting","Court patronage"]},
+
+  {id:"fatehpur-sikri", name:"Fatehpur Sikri / Agra", lat:27.1766701, lng:78.0080745, era:"mughal",
+   dates:"1571–1707 CE",
+   desc:"Akbar's short-lived capital and the wider Agra region housed the imperial painting workshops that produced Mughal miniatures, alongside red sandstone and marble architecture fusing Persian, Hindu, and Jain motifs.",
+   tags:["Imperial ateliers","Miniature painting","Indo-Persian architecture"]},
+
+  {id:"kolkata", name:"Kolkata", lat:22.5743545, lng:88.3628734, era:"bengal",
+   dates:"c. 1830s–1940s",
+   desc:"Base of the Bengal School and Abanindranath Tagore's nationalist wash-painting movement, and earlier home to Kalighat patua painting — bold, quick folk-style pictures sold to temple pilgrims.",
+   tags:["Bengal School","Kalighat pat","Abanindranath Tagore"]},
+
+  {id:"santiniketan", name:"Santiniketan", lat:23.6776471, lng:87.6852323, era:"bengal",
+   dates:"founded 1901",
+   desc:"Rabindranath Tagore's experimental school grew Kala Bhavana, an art institute where Nandalal Bose and others taught an approach rooted in Indian craft and nature study rather than European academic method.",
+   tags:["Kala Bhavana","Nandalal Bose","Art pedagogy"]},
+
+  {id:"vadodara", name:"Vadodara", lat:22.3001515, lng:73.2105012, era:"modern",
+   dates:"from 1950s",
+   desc:"The Faculty of Fine Arts at MS University became one of independent India's most influential modern art schools, training generations of painters and sculptors who shaped post-1947 Indian art.",
+   tags:["MSU Faculty of Fine Arts","Art education","Post-independence modernism"]},
+
+  {id:"mumbai", name:"Mumbai", lat:18.9582347, lng:72.8319514, era:"modern",
+   dates:"from 1947",
+   desc:"Home to the J. J. School of Art and the Progressive Artists' Group — Husain, Souza, Raza and others who broke from academic realism and revivalist nationalism to build a bold modern Indian idiom.",
+   tags:["Progressive Artists' Group","J.J. School of Art","M.F. Husain"]},
+
+  {id:"cholamandal", name:"Cholamandal Artists' Village", lat:12.9226213, lng:80.2523502, era:"modern",
+   dates:"founded 1966",
+   desc:"South India's answer to Bombay's modernism: a self-sustaining artists' colony near Chennai that grew out of the Madras Art Movement, where painters and sculptors live, work, and sell together.",
+   tags:["Madras Art Movement","Artist collective","Contemporary sculpture"]}
+];
+
+// ---------- Sidebar + Legend ----------
+const sidebar = document.getElementById('sidebar');
+const legend = document.getElementById('legend');
+const markers = {};
+const activeEras = new Set(Object.keys(ERA_META));
+
+const map = L.map('map', {scrollWheelZoom:true}).setView([21.5, 79], 5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; OpenStreetMap contributors &copy; CARTO',
+  maxZoom:18
+}).addTo(map);
+
+function makeMarker(site){
+  const color = ERA_META[site.era].color;
+  const m = L.circleMarker([site.lat, site.lng], {
+    radius:9, color:color, weight:2, fillColor:color, fillOpacity:0.85
+  });
+  m.bindPopup(
+    `<div class="popup-title">${site.name}</div>
+     <div class="popup-dates" style="color:${color}">${site.dates}</div>
+     <div>${site.desc}</div>`
+  );
+  m.on('click', () => setActive(site.id));
+  return m;
+}
+
+SITES.forEach(site => { markers[site.id] = makeMarker(site).addTo(map); });
+
+// group sites by era for sidebar, preserving ERA_META order
+Object.keys(ERA_META).forEach(eraKey => {
+  const group = SITES.filter(s => s.era === eraKey);
+  if(!group.length) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'era-group';
+  wrap.style.setProperty('--era-color', ERA_META[eraKey].color);
+  wrap.innerHTML = `<div class="era-title">${ERA_META[eraKey].label}</div>`;
+  group.forEach(site => {
+    const card = document.createElement('div');
+    card.className = 'site-card';
+    card.id = 'card-' + site.id;
+    card.style.setProperty('--era-color', ERA_META[eraKey].color);
+    card.innerHTML = `
+      <div class="site-name">${site.name}</div>
+      <div class="site-dates">${site.dates}</div>
+      <p class="site-desc">${site.desc}</p>
+      <div class="site-tags">${site.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+    `;
+    card.addEventListener('click', () => {
+      setActive(site.id);
+      map.flyTo([site.lat, site.lng], 7, {duration:0.6});
+      markers[site.id].openPopup();
+    });
+    wrap.appendChild(card);
+  });
+  sidebar.appendChild(wrap);
+});
+
+function setActive(id){
+  document.querySelectorAll('.site-card').forEach(c => c.classList.remove('active'));
+  const card = document.getElementById('card-' + id);
+  if(card){ card.classList.add('active'); card.scrollIntoView({block:'nearest', behavior:'smooth'}); }
+}
+
+// legend chips toggle era visibility
+Object.entries(ERA_META).forEach(([key, meta]) => {
+  const chip = document.createElement('div');
+  chip.className = 'legend-chip';
+  chip.innerHTML = `<span class="legend-swatch" style="background:${meta.color}"></span>${meta.label}`;
+  chip.addEventListener('click', () => {
+    if(activeEras.has(key)){ activeEras.delete(key); chip.classList.add('off'); }
+    else { activeEras.add(key); chip.classList.remove('off'); }
+    SITES.filter(s=>s.era===key).forEach(s=>{
+      if(activeEras.has(key)){ markers[s.id].addTo(map); }
+      else { map.removeLayer(markers[s.id]); }
+    });
+  });
+  legend.appendChild(chip);
+});
+
+// open first site by default
+setActive(SITES[0].id);
+</script>
+</body>
+</html>
